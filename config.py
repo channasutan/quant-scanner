@@ -12,7 +12,8 @@ ADV_WINDOW = 30  # bars for liquidity ranking
 SEED = 42
 
 # Inference API
-INFERENCE_URL = "https://worker-production-b8c8.up.railway.app/api/infer"
+import os
+INFERENCE_URL = os.getenv("INFERENCE_URL", "https://worker-production-b8c8.up.railway.app/api/infer")
 
 # Exchange configuration
 EXCHANGE = "toobit"
