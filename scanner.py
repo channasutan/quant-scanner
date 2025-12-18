@@ -228,8 +228,13 @@ def run_scanner() -> dict:
     if latest_features.empty:
         raise ValueError(f"No data available for last closed bar: {last_closed}")
     
+    # Create mask for rows with complete features
+    features = get_inference_features()
+    valid_mask = latest_features[features].notna().all(axis=1)
+    
     payload = prepare_inference_payload(latest_features)
     print(f"Inference payload size: {len(payload['rows'])} rows")
+    print(f"Total rows: {len(latest_features)}, Valid features: {valid_mask.sum()}")
     
     if not payload["rows"]:
         raise ValueError("No valid features for inference")
@@ -239,8 +244,9 @@ def run_scanner() -> dict:
     predictions = call_inference_api(payload)
     print(f"Received {len(predictions)} predictions")
     
-    # 6. Merge predictions back
-    latest_features["raw_alpha"] = [p["raw_alpha"] for p in predictions]
+    # 6. Merge predictions back using mask
+    latest_features["raw_alpha"] = np.nan  # Initialize all as NaN
+    latest_features.loc[valid_mask, "raw_alpha"] = [p["raw_alpha"] for p in predictions]
     
     # 7. Cross-sectional ranking
     print("\nPerforming cross-sectional ranking...")
