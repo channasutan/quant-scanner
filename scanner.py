@@ -250,6 +250,15 @@ def run_scanner() -> dict:
     
     # 6. Merge predictions back using mask
     latest_features["raw_alpha"] = np.nan  # Initialize all as NaN
+    
+    # Ensure prediction count matches valid mask count
+    valid_count = valid_mask.sum()
+    pred_count = len(predictions)
+    
+    if pred_count != valid_count:
+        raise ValueError(f"Prediction count ({pred_count}) != valid feature count ({valid_count})")
+    
+    # Safe assignment using mask
     latest_features.loc[valid_mask, "raw_alpha"] = [p["raw_alpha"] for p in predictions]
     
     # 7. Cross-sectional ranking
