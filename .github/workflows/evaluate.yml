@@ -1,0 +1,24 @@
+name: Scanner Evaluation
+
+on:
+  schedule:
+    - cron: "15 * * * *"  # every hour, offset from scanner
+  workflow_dispatch:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+        
+    - run: pip install -r requirements.txt
+    
+    - run: python evaluate_scanner.py
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
