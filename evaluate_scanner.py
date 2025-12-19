@@ -4,17 +4,22 @@ import ccxt
 from datetime import datetime, timezone, timedelta
 from supabase import create_client
 
-HORIZON_H = 4
+TIMEFRAME = "4h"
+TF_HOURS = 4
+HORIZON_H = TF_HOURS
 
-def fetch_price_at_or_after(symbols, target_ts, timeframe="4h", lookahead=3):
+# Exchange singleton
+EX = ccxt.toobit({"enableRateLimit": True})
+
+def fetch_price_at_or_after(symbols, target_ts, timeframe=TIMEFRAME, lookahead=3):
     """
     Fetch CLOSE price from the first candle whose close_time >= target_ts
     Leak-safe.
     """
-    ex = ccxt.toobit({"enableRateLimit": True})
+    ex = EX
     out = {}
     
-    since = int((target_ts - timedelta(hours=lookahead * 4)).timestamp() * 1000)
+    since = int((target_ts - timedelta(hours=lookahead * TF_HOURS)).timestamp() * 1000)
     
     for symbol in symbols:
         try:
