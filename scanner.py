@@ -232,13 +232,12 @@ def run_scanner() -> dict:
     features = get_inference_features()
     valid_mask = latest_features[features].notna().all(axis=1)
     
-    payload = prepare_inference_payload(latest_features)
-    print(f"Inference payload size: {len(payload['rows'])} rows")
-    print(f"Total rows: {len(latest_features)}, Valid features: {valid_mask.sum()}")
+    # Build payload from ONLY valid rows (CRITICAL FIX)
+    latest_valid = latest_features.loc[valid_mask].copy()
+    payload = prepare_inference_payload(latest_valid)
     
-    # Ensure alignment: predictions should match valid feature count
-    if len(payload["rows"]) != valid_mask.sum():
-        raise ValueError(f"Payload size mismatch: {len(payload['rows'])} vs {valid_mask.sum()}")
+    print(f"Total rows: {len(latest_features)}, Valid features: {valid_mask.sum()}")
+    print(f"Inference payload size: {len(payload['rows'])} rows")
     
     if not payload["rows"]:
         raise ValueError("No valid features for inference")
@@ -251,12 +250,9 @@ def run_scanner() -> dict:
     # 6. Merge predictions back using mask
     latest_features["raw_alpha"] = np.nan  # Initialize all as NaN
     
-    # Ensure prediction count matches valid mask count
-    valid_count = valid_mask.sum()
-    pred_count = len(predictions)
-    
-    if pred_count != valid_count:
-        raise ValueError(f"Prediction count ({pred_count}) != valid feature count ({valid_count})")
+    # Bulletproof validation
+    assert len(predictions) == len(latest_valid), f"Prediction count mismatch: {len(predictions)} != {len(latest_valid)}"
+    assert len(predictions) == valid_mask.sum(), f"Prediction vs mask mismatch: {len(predictions)} != {valid_mask.sum()}"
     
     # Safe assignment using mask - FIXED VERSION 2025-12-19
     latest_features.loc[valid_mask, "raw_alpha"] = [p["raw_alpha"] for p in predictions]
