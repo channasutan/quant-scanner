@@ -1,6 +1,7 @@
 """
 Real-time scanner service that consumes inference API.
 Pure orchestration - no ML training.
+SCANNER VERSION: 2025-12-19-FIXED-MASK
 """
 import ccxt
 import pandas as pd
@@ -197,6 +198,9 @@ def run_scanner() -> dict:
     Returns:
         Dict with scanner results
     """
+    # HARD STOP: Ensure we're running the fixed version
+    assert "SCANNER VERSION: 2025-12-19-FIXED-MASK" in open(__file__).read(), "WRONG SCANNER VERSION!"
+    
     print("=" * 60)
     print("REAL-TIME SCANNER SERVICE")
     print("=" * 60)

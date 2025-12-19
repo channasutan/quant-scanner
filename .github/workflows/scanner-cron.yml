@@ -31,6 +31,16 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         
+    - name: Debug scanner file
+      run: |
+        echo "=== scanner.py path ==="
+        pwd
+        ls -lah
+        echo "=== grep raw_alpha assignment ==="
+        grep -R "latest_features\[\"raw_alpha\"\]" -n .
+        echo "=== scanner.py content around line 243 ==="
+        sed -n '240,250p' scanner.py
+        
     - name: Run scanner
       env:
         INFERENCE_URL: ${{ secrets.INFERENCE_URL }}
