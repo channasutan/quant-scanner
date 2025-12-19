@@ -10,6 +10,9 @@ import requests
 from datetime import timedelta
 from scipy.stats import spearmanr
 from tqdm import tqdm
+from uuid import uuid4
+import os
+from supabase import create_client, Client
 
 from config import (
     TIMEFRAME_HOURS, TIMEFRAME, TOP_K, ADV_WINDOW,
@@ -17,6 +20,17 @@ from config import (
     LARGE_TIER_THRESHOLD, MID_TIER_THRESHOLD, SEED
 )
 from features import build_features, get_inference_features, prepare_inference_payload
+
+
+def get_supabase_client() -> Client:
+    """Initialize Supabase client with service role key."""
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    
+    if not url or not key:
+        raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set")
+    
+    return create_client(url, key)
 
 
 def last_closed_bar(hours: int) -> pd.Timestamp:
@@ -191,6 +205,66 @@ def generate_output(ranked: pd.DataFrame) -> dict:
     return output
 
 
+def save_to_supabase(ranked: pd.DataFrame, last_closed: pd.Timestamp, execution_time_ms: int) -> str:
+    """
+    Save scanner results to Supabase with immutable snapshot semantics.
+    
+    Args:
+        ranked: DataFrame with scanner results
+        last_closed: Timestamp of the scan
+        execution_time_ms: Execution time in milliseconds
+        
+    Returns:
+        run_id: UUID of the created run
+    """
+    supabase = get_supabase_client()
+    run_id = str(uuid4())
+    
+    # Prepare run metadata
+    run_row = {
+        "run_id": run_id,
+        "asof_ts": last_closed.isoformat(),
+        "timeframe": TIMEFRAME,
+        "model_id": "lgb_v1",
+        "universe_size": len(ranked),
+        "execution_time_ms": execution_time_ms
+    }
+    
+    # Prepare results rows with rankings
+    rows = []
+    for tier in ["LARGE", "MID", "SMALL"]:
+        tier_df = ranked[ranked["tier"] == tier].copy()
+        if tier_df.empty:
+            continue
+            
+        # Add rankings
+        tier_df = tier_df.sort_values("scanner_score", ascending=False).reset_index(drop=True)
+        tier_df["rank_long"] = tier_df.index + 1
+        
+        tier_df = tier_df.sort_values("scanner_score", ascending=True).reset_index(drop=True)
+        tier_df["rank_short"] = tier_df.index + 1
+        
+        # Convert to rows
+        for _, row in tier_df.iterrows():
+            rows.append({
+                "run_id": run_id,
+                "symbol": row["symbol"],
+                "tier": row["tier"],
+                "raw_alpha": float(row["raw_alpha"]) if pd.notna(row["raw_alpha"]) else None,
+                "scanner_score": float(row["scanner_score"]) if pd.notna(row["scanner_score"]) else None,
+                "rank_long": int(row["rank_long"]),
+                "rank_short": int(row["rank_short"]),
+                "adv": float(row["adv"]) if pd.notna(row["adv"]) else None
+            })
+    
+    # Insert to Supabase (append-only)
+    supabase.table("scanner_runs").insert(run_row).execute()
+    supabase.table("scanner_results").insert(rows).execute()
+    
+    print(f"✅ Saved to Supabase: run_id={run_id}, {len(rows)} results")
+    return run_id
+
+
 def run_scanner() -> dict:
     """
     Main scanner execution.
@@ -198,6 +272,9 @@ def run_scanner() -> dict:
     Returns:
         Dict with scanner results
     """
+    import time
+    start_time = time.time()
+    
     # HARD STOP: Ensure we're running the fixed version
     assert "SCANNER VERSION: 2025-12-19-FIXED-MASK" in open(__file__).read(), "WRONG SCANNER VERSION!"
     
@@ -269,12 +346,18 @@ def run_scanner() -> dict:
     print("\nGenerating output...")
     output = generate_output(ranked)
     
+    # 9. Save to Supabase
+    execution_time_ms = int((time.time() - start_time) * 1000)
+    print(f"\nSaving to Supabase...")
+    run_id = save_to_supabase(ranked, last_closed, execution_time_ms)
+    
     # Print summary
     print("\n" + "=" * 60)
     print("SCANNER RESULTS")
     print("=" * 60)
     print(f"Timestamp: {last_closed}")
     print(f"Universe size: {len(ranked)}")
+    print(f"Run ID: {run_id}")
     print(f"\nTier distribution:")
     print(ranked["tier"].value_counts())
     
@@ -294,6 +377,7 @@ def run_scanner() -> dict:
     return {
         "timestamp": str(last_closed),
         "universe_size": len(ranked),
+        "run_id": run_id,
         "tiers": output
     }
 
