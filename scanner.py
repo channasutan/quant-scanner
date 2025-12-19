@@ -236,6 +236,10 @@ def run_scanner() -> dict:
     print(f"Inference payload size: {len(payload['rows'])} rows")
     print(f"Total rows: {len(latest_features)}, Valid features: {valid_mask.sum()}")
     
+    # Ensure alignment: predictions should match valid feature count
+    if len(payload["rows"]) != valid_mask.sum():
+        raise ValueError(f"Payload size mismatch: {len(payload['rows'])} vs {valid_mask.sum()}")
+    
     if not payload["rows"]:
         raise ValueError("No valid features for inference")
     
