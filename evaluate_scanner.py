@@ -6,28 +6,37 @@ from supabase import create_client
 
 HORIZON_H = 4
 
-def fetch_price(symbols, timestamp):
-    """Fetch close prices at specific timestamp using ccxt."""
+def fetch_price_at_or_after(symbols, target_ts, timeframe="4h", lookahead=3):
+    """
+    Fetch CLOSE price from the first candle whose close_time >= target_ts
+    Leak-safe.
+    """
     ex = ccxt.toobit({"enableRateLimit": True})
-    prices = {}
+    out = {}
     
-    # Convert timestamp to milliseconds
-    since = int(timestamp.timestamp() * 1000)
+    since = int((target_ts - timedelta(hours=lookahead * 4)).timestamp() * 1000)
     
     for symbol in symbols:
         try:
-            # Fetch one candle at the timestamp
-            bars = ex.fetch_ohlcv(symbol, "4h", since=since, limit=1)
-            if bars and len(bars) > 0:
-                # Use close price
-                prices[symbol] = bars[0][4]  # close price
-            else:
-                prices[symbol] = None
+            bars = ex.fetch_ohlcv(
+                symbol,
+                timeframe,
+                since=since,
+                limit=lookahead + 1
+            )
+            price = None
+            for b in bars:
+                open_ts = pd.Timestamp(b[0], unit="ms", tz="UTC")
+                close_ts = open_ts + pd.Timedelta(timeframe)
+                if close_ts >= target_ts:
+                    price = b[4]  # close
+                    break
+            out[symbol] = price
         except Exception as e:
-            print(f"Error fetching {symbol}: {e}")
-            prices[symbol] = None
+            print(f"[price_fetch_error] {symbol}: {e}")
+            out[symbol] = None
     
-    return pd.Series(prices)
+    return pd.Series(out)
 
 def main():
     sb = create_client(
@@ -88,8 +97,8 @@ def main():
 
         # 3. Fetch prices (PAST → FUTURE)
         try:
-            price_T = fetch_price(symbols, asof_ts)
-            price_TH = fetch_price(symbols, asof_ts + timedelta(hours=HORIZON_H))
+            price_T = fetch_price_at_or_after(symbols, asof_ts)
+            price_TH = fetch_price_at_or_after(symbols, asof_ts + timedelta(hours=HORIZON_H))
             
             # Calculate forward returns
             df["price_T"] = df["symbol"].map(price_T)
@@ -104,6 +113,9 @@ def main():
                 continue
             
             df_valid["fwd_return"] = (df_valid["price_TH"] / df_valid["price_T"]) - 1
+            
+            # Guard against suspicious returns
+            assert (df_valid["fwd_return"].abs() < 5).all(), "Suspicious fwd_return"
             
             # Prepare evaluation rows
             out = []
