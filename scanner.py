@@ -273,7 +273,6 @@ def run_scanner() -> dict:
         Dict with scanner results
     """
     import time
-    from datetime import datetime, timezone
     start_time = time.time()
     
     # HARD STOP: Ensure we're running the fixed version
@@ -282,22 +281,6 @@ def run_scanner() -> dict:
     print("=" * 60)
     print("REAL-TIME SCANNER SERVICE")
     print("=" * 60)
-    
-    # TEMPORARY: Test Supabase connectivity
-    print("\nTesting Supabase connectivity...")
-    supabase = get_supabase_client()
-    test_run_id = str(uuid4())
-    test_asof_ts = datetime.now(timezone.utc)
-    
-    supabase.table("scanner_runs").insert({
-        "run_id": test_run_id,
-        "asof_ts": test_asof_ts.isoformat(),
-        "timeframe": "4h",
-        "model_id": "worker_test",
-        "universe_size": 1,
-    }).execute()
-    
-    print("Inserted run_id:", test_run_id)
     
     # 1. Determine last closed bar
     last_closed = last_closed_bar(TIMEFRAME_HOURS)
