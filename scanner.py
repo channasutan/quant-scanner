@@ -258,7 +258,7 @@ def run_scanner() -> dict:
     if pred_count != valid_count:
         raise ValueError(f"Prediction count ({pred_count}) != valid feature count ({valid_count})")
     
-    # Safe assignment using mask
+    # Safe assignment using mask - FIXED VERSION 2025-12-19
     latest_features.loc[valid_mask, "raw_alpha"] = [p["raw_alpha"] for p in predictions]
     
     # 7. Cross-sectional ranking
