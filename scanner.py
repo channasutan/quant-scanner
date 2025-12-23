@@ -149,14 +149,18 @@ def rank_cross_sectional(df: pd.DataFrame, last_closed: pd.Timestamp) -> pd.Data
         "tier"
     ] = "MID"
     
-    # Robust z-score per tier (MAD-based)
+    # Robust z-score per tier (MAD-based) - FIXED VERSION 2025-12-24
     def cs_z_mad(group):
         med = group["raw_alpha"].median()
         mad = np.median(np.abs(group["raw_alpha"] - med))
-        if mad == 0 or not np.isfinite(mad):
-            group["scanner_score"] = 0.0
-        else:
-            group["scanner_score"] = (group["raw_alpha"] - med) / (1.4826 * mad)
+        
+        # CRITICAL FIX: Use minimum MAD threshold instead of zero-filling
+        # This preserves cross-sectional ordering for low-variance tiers
+        min_mad = 1e-6  # Minimum variance threshold
+        if mad < min_mad or not np.isfinite(mad):
+            mad = min_mad
+        
+        group["scanner_score"] = (group["raw_alpha"] - med) / (1.4826 * mad)
         return group
     
     ranked = latest.groupby("tier", group_keys=False).apply(cs_z_mad)
