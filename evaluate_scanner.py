@@ -6,7 +6,7 @@ from supabase import create_client
 
 TIMEFRAME = "4h"
 TF_HOURS = 4
-HORIZON_H = TF_HOURS
+HORIZON_H = 3 * TF_HOURS  # 3 periods = 12 hours total
 
 # Exchange singleton
 EX = ccxt.toobit({"enableRateLimit": True})
