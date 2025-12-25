@@ -15,8 +15,9 @@ from datetime import datetime, timezone, timedelta
 from supabase import create_client
 
 TIMEFRAME = "4h"
-TF_HOURS = 4
-HORIZON_H = TF_HOURS  # FIXED: Use 4h horizon to match scanner frequency (was 12h)
+TIMEFRAME_HOURS = 4    # Actual hours per candle (for time calculations)
+HORIZON_BARS = 1       # Number of bars forward (clearer naming)
+HORIZON_H = HORIZON_BARS * TIMEFRAME_HOURS  # 1 * 4 = 4 hours
 
 # Exchange singleton
 EX = ccxt.toobit({"enableRateLimit": True})
@@ -29,7 +30,7 @@ def fetch_price_at_or_after(symbols, target_ts, timeframe=TIMEFRAME, lookahead=3
     ex = EX
     out = {}
     
-    since = int((target_ts - timedelta(hours=lookahead * TF_HOURS)).timestamp() * 1000)
+    since = int((target_ts - timedelta(hours=lookahead * TIMEFRAME_HOURS)).timestamp() * 1000)
     
     for symbol in symbols:
         try:
@@ -43,7 +44,7 @@ def fetch_price_at_or_after(symbols, target_ts, timeframe=TIMEFRAME, lookahead=3
             
             for b in bars:
                 bar_open_ts = pd.Timestamp(b[0], unit="ms", tz="UTC")
-                bar_close_ts = bar_open_ts + pd.Timedelta(hours=TF_HOURS)
+                bar_close_ts = bar_open_ts + pd.Timedelta(hours=TIMEFRAME_HOURS)
                 
                 # FIXED: Find bar that contains or comes after target timestamp
                 if bar_close_ts >= target_ts:
